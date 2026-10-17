@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formatta prospetto</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 16px; font-size: 14px; }
+  button { background: #4072C4; color: #fff; border: 0; padding: 10px 16px; font-size: 14px; cursor: pointer; width: 100%; }
+  button:disabled { background: #999; cursor: default; }
+  #stato { margin-top: 14px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+  <button id="btn" disabled>Formatta prospetto</button>
+  <div id="stato">Caricamento...</div>
+  <script src="taskpane.js"></script>
+</body>
+</html>
