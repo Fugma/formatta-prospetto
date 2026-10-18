@@ -39,12 +39,98 @@ const FORMULE = [
    formula: "=LAMBDA(CodiceAzienda,CodiceDipendente, TEXT(CodiceAzienda, \"000000\") & TEXT(CodiceDipendente, \"0000000\"))"}
 ];
 
-const VERSIONE_LAMBDA = "v4";
+const VERSIONE_LAMBDA = "v5";
+
+// ---------------------------------------------------------------------------------------------
+// Excel (via Office.js) accetta i nomi LAMBDA solo se scritti come nel formato file:
+// parametri e variabili LET con prefisso "_xlpm." e (forse) funzioni recenti con "_xlfn.".
+// convertiFormula() fa questa trasformazione. Le formule originali restano invariate in FORMULE.
+// ---------------------------------------------------------------------------------------------
+const PREFISSI_FUNZIONI = {
+  LAMBDA: "_xlfn.LAMBDA", LET: "_xlfn.LET", XLOOKUP: "_xlfn.XLOOKUP", SEQUENCE: "_xlfn.SEQUENCE",
+  UNIQUE: "_xlfn.UNIQUE", VSTACK: "_xlfn.VSTACK", HSTACK: "_xlfn.HSTACK",
+  FILTER: "_xlfn._xlws.FILTER", SORT: "_xlfn._xlws.SORT"
+};
+
+function convertiFormula(formula, conPrefissiFunzioni) {
+  const tok = [];
+  const n = formula.length;
+  const reId = /[A-Za-z_\u00C0-\u024F]/, reIdC = /[A-Za-z0-9_.\u00C0-\u024F]/;
+  let i = 0;
+  while (i < n) {
+    const ch = formula[i];
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < n) {
+        if (formula[j] === '"') { if (formula[j + 1] === '"') { j += 2; continue; } break; }
+        j++;
+      }
+      tok.push({ t: "str", v: formula.slice(i, j + 1) }); i = j + 1;
+    } else if (ch === "'") {
+      let j = formula.indexOf("'", i + 1); if (j < 0) j = n - 1;
+      tok.push({ t: "str", v: formula.slice(i, j + 1) }); i = j + 1;
+    } else if (/[0-9]/.test(ch)) {
+      let j = i + 1;
+      while (j < n && /[0-9.]/.test(formula[j])) j++;
+      tok.push({ t: "num", v: formula.slice(i, j) }); i = j;
+    } else if (reId.test(ch)) {
+      let j = i + 1;
+      while (j < n && reIdC.test(formula[j])) j++;
+      let k = j; while (formula[k] === " ") k++;
+      tok.push({ t: formula[k] === "(" ? "fn" : "id", v: formula.slice(i, j) }); i = j;
+    } else {
+      tok.push({ t: "op", v: ch }); i++;
+    }
+  }
+
+  // Passo 1: trova i nomi dichiarati (parametri di LAMBDA e variabili di LET)
+  const dichiarati = new Set();
+  const pila = [];
+  let pend = null;
+  const unico = (a) => a.length === 1 && tok[a[0]].t === "id";
+  const chiudi = (f) => {
+    f.args.push(f.cur);
+    if (f.tipo === "LAMBDA") {
+      f.args.slice(0, -1).forEach((a) => { if (unico(a)) dichiarati.add(tok[a[0]].v.toLowerCase()); });
+    } else if (f.tipo === "LET") {
+      for (let q = 0; q < f.args.length - 1; q += 2) if (unico(f.args[q])) dichiarati.add(tok[f.args[q][0]].v.toLowerCase());
+    }
+  };
+  for (let k = 0; k < tok.length; k++) {
+    const x = tok[k];
+    if (x.t === "op" && x.v === " ") continue;
+    const top = pila[pila.length - 1];
+    if (x.t === "fn") { pend = x.v.toUpperCase(); if (top) top.cur.push(k); continue; }
+    if (x.t === "op" && x.v === "(") { pila.push({ tipo: pend || "group", args: [], cur: [] }); pend = null; continue; }
+    if (x.t === "op" && x.v === "{") { pila.push({ tipo: "brace", args: [], cur: [] }); continue; }
+    if (x.t === "op" && (x.v === ")" || x.v === "}")) {
+      const f = pila.pop();
+      if (f) chiudi(f);
+      const padre = pila[pila.length - 1];
+      if (padre) padre.cur.push(k);
+      continue;
+    }
+    if (x.t === "op" && (x.v === "," || x.v === ";") && top && top.tipo !== "brace" && top.tipo !== "group") {
+      top.args.push(top.cur); top.cur = []; continue;
+    }
+    if (top) top.cur.push(k);
+  }
+
+  // Passo 2: riscrive la formula
+  return tok.map((x) => {
+    if (x.t === "fn") {
+      const p = conPrefissiFunzioni && PREFISSI_FUNZIONI[x.v.toUpperCase()];
+      return p || x.v;
+    }
+    if (x.t === "id" && dichiarati.has(x.v.toLowerCase())) return "_xlpm." + x.v;
+    return x.v;
+  }).join("");
+}
+
+// ---------------------------------------------------------------------------------------------
 
 function dettaglioErrore(e) {
-  let t = (e.code ? e.code + ": " : "") + e.message;
-  if (e.debugInfo && e.debugInfo.errorLocation) t += " [" + e.debugInfo.errorLocation + "]";
-  return t;
+  return (e.code ? e.code : "") + (e.code ? ": " : "") + e.message;
 }
 
 async function eliminaNomeSeEsiste(nome) {
@@ -58,44 +144,58 @@ async function eliminaNomeSeEsiste(nome) {
   } catch (e) { /* niente */ }
 }
 
-// Prova a creare il nome con due metodi. Restituisce null se riesce, altrimenti il testo degli errori.
-async function aggiungiNome(nome, formula) {
-  const errori = [];
-
-  try {                                    // Metodo 1: creazione diretta
-    await Excel.run(async (ctx) => {
-      ctx.workbook.names.add(nome, formula);
-      await ctx.sync();
-    });
-    return null;
-  } catch (e) { errori.push("metodo 1 -> " + dettaglioErrore(e)); }
-
-  await eliminaNomeSeEsiste(nome);
-
-  try {                                    // Metodo 2: nome provvisorio, poi si imposta la formula
-    await Excel.run(async (ctx) => {
+async function creaNome(nome, formula, inDuePassaggi) {
+  await Excel.run(async (ctx) => {
+    if (inDuePassaggi) {
       const n = ctx.workbook.names.add(nome, "=0");
       await ctx.sync();
       n.formula = formula;
-      await ctx.sync();
-    });
-    return null;
-  } catch (e) {
-    errori.push("metodo 2 -> " + dettaglioErrore(e));
-    await eliminaNomeSeEsiste(nome);
-  }
-  return errori.join("\n   ");
+    } else {
+      ctx.workbook.names.add(nome, formula);
+    }
+    await ctx.sync();
+  });
 }
 
-// Piccole prove per capire cosa accetta Excel (i nomi di prova vengono poi eliminati)
+const STRATEGIE = [
+  { nome: "diretto",                        conv: (f) => f,                         due: false },
+  { nome: "_xlpm",                          conv: (f) => convertiFormula(f, false), due: false },
+  { nome: "_xlpm + _xlfn",                  conv: (f) => convertiFormula(f, true),  due: false },
+  { nome: "_xlpm, due passaggi",            conv: (f) => convertiFormula(f, false), due: true },
+  { nome: "_xlpm + _xlfn, due passaggi",    conv: (f) => convertiFormula(f, true),  due: true }
+];
+let strategiaVincente = null;
+
+// Prova le strategie in ordine. Restituisce { ok, strategia } oppure { ok:false, errori:[...] }
+async function aggiungiNome(nome, formula) {
+  const ordine = STRATEGIE.slice();
+  if (strategiaVincente !== null) ordine.unshift(ordine.splice(strategiaVincente, 1)[0]);
+  const errori = [];
+  for (const st of ordine) {
+    try {
+      await creaNome(nome, st.conv(formula), st.due);
+      strategiaVincente = STRATEGIE.indexOf(st);
+      return { ok: true, strategia: st.nome };
+    } catch (e) {
+      errori.push(st.nome + " -> " + dettaglioErrore(e));
+      await eliminaNomeSeEsiste(nome);
+    }
+  }
+  return { ok: false, errori: errori };
+}
+
+// Prove su un nome temporaneo (poi eliminato) per capire cosa accetta Excel
 async function proveNomi() {
   const NOME = "rr_prova_temporanea";
   const prove = [
-    ["formula semplice (=1+1), diretto", async (ctx) => { ctx.workbook.names.add(NOME, "=1+1"); await ctx.sync(); }],
-    ["LAMBDA semplice, diretto", async (ctx) => { ctx.workbook.names.add(NOME, "=LAMBDA(x,x+1)"); await ctx.sync(); }],
-    ["LAMBDA semplice, in due passaggi", async (ctx) => {
-        const n = ctx.workbook.names.add(NOME, "=0"); await ctx.sync();
-        n.formula = "=LAMBDA(x,x+1)"; await ctx.sync(); }]
+    ["=SUM(1,2)", async (ctx) => { ctx.workbook.names.add(NOME, "=SUM(1,2)"); await ctx.sync(); }],
+    ["=SUM(1;2)", async (ctx) => { ctx.workbook.names.add(NOME, "=SUM(1;2)"); await ctx.sync(); }],
+    ["=LAMBDA(x,x+1)", async (ctx) => { ctx.workbook.names.add(NOME, "=LAMBDA(x,x+1)"); await ctx.sync(); }],
+    ["=LAMBDA(_xlpm.x,_xlpm.x+1)", async (ctx) => { ctx.workbook.names.add(NOME, "=LAMBDA(_xlpm.x,_xlpm.x+1)"); await ctx.sync(); }],
+    ["=_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1)", async (ctx) => { ctx.workbook.names.add(NOME, "=_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1)"); await ctx.sync(); }],
+    ["=LET(a,1,a+1)", async (ctx) => { ctx.workbook.names.add(NOME, "=LET(a,1,a+1)"); await ctx.sync(); }],
+    ["=_xlfn.LET(_xlpm.a,1,_xlpm.a+1)", async (ctx) => { ctx.workbook.names.add(NOME, "=_xlfn.LET(_xlpm.a,1,_xlpm.a+1)"); await ctx.sync(); }],
+    ["=LAMBDA(x;x+1) (con formula locale)", async (ctx) => { ctx.workbook.names.addFormulaLocal(NOME, "=LAMBDA(x;x+1)"); await ctx.sync(); }]
   ];
   const righe = [];
   for (const [descrizione, fn] of prove) {
@@ -109,6 +209,7 @@ async function proveNomi() {
 
 async function macroFormuleLambda() {
   let aggiunte = 0, presenti = 0;
+  const usate = {};
   const falliti = [];
 
   for (const f of FORMULE) {
@@ -123,14 +224,18 @@ async function macroFormuleLambda() {
     } catch (e) { /* si prova comunque ad aggiungere */ }
 
     if (esiste) { presenti++; continue; }
-    const errore = await aggiungiNome(f.nome, f.formula);
-    if (errore === null) aggiunte++; else falliti.push({ nome: f.nome, errore: errore });
+    const r = await aggiungiNome(f.nome, f.formula);
+    if (r.ok) { aggiunte++; usate[r.strategia] = (usate[r.strategia] || 0) + 1; }
+    else falliti.push({ nome: f.nome, errori: r.errori });
   }
 
   let msg = "Formule LAMBDA (" + VERSIONE_LAMBDA + "): " + aggiunte + " aggiunte, " + presenti + " già presenti" + (falliti.length ? "" : " ✓");
+  if (aggiunte) msg += "\nMetodo riuscito: " + Object.keys(usate).map((k) => k + " (" + usate[k] + ")").join(", ");
   if (falliti.length) {
     msg += "\nNon aggiunte: " + falliti.length + " su " + FORMULE.length;
-    msg += "\n\nPrimo errore (" + falliti[0].nome + "):\n   " + falliti[0].errore;
+    msg += "\n\nPrimo errore (" + falliti[0].nome + "):\n   " + falliti[0].errori.join("\n   ");
+    const orig = FORMULE.find((x) => x.nome === falliti[0].nome).formula;
+    msg += "\n\nFormula convertita (primi 250 caratteri):\n" + convertiFormula(orig, true).slice(0, 250);
     msg += "\n\nProve:\n" + await proveNomi();
     try {
       const d = Office.context.diagnostics;
