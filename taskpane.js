@@ -7,6 +7,7 @@ const MACRO = [
   { titolo: "Presenze",                    desc: "Unisce ORE e MINUTI in TOT HH, formatta le date",   esegui: macroPresenze,     colore: "#2E7D32", testo: "#FFFFFF" },
   { titolo: "Apri tutto in formato testo", desc: "Importa un file di testo in una nuova cartella",    esegui: macroApriTesto,    colore: "#B45309", testo: "#FFFFFF", senzaBlocco: true },
   { titolo: "Budget",                      desc: "Toglie colonne inutili, unisce descrizioni, importi", esegui: macroBudget,     colore: "#6A4C93", testo: "#FFFFFF" },
+  { titolo: "Apri tutti i CSV di una cartella", desc: "Unisce i file di una cartella nel foglio RIEPILOGO", esegui: macroApriCartella, colore: "#00796B", testo: "#FFFFFF", senzaBlocco: true },
   { titolo: "Formule LAMBDA",              desc: "Aggiunge le formule personalizzate (rr_...)",       esegui: macroFormuleLambda, colore: "#444441", testo: "#FFFFFF" }
 ];
 
