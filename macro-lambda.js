@@ -39,27 +39,74 @@ const FORMULE = [
    formula: "=LAMBDA(CodiceAzienda,CodiceDipendente, TEXT(CodiceAzienda, \"000000\") & TEXT(CodiceDipendente, \"0000000\"))"}
 ];
 
-async function macroFormuleLambda() {
-  let aggiunte = 0, presenti = 0;
+function dettaglioErrore(e) {
+  let t = (e.code ? e.code + ": " : "") + e.message;
+  if (e.debugInfo && e.debugInfo.errorLocation) t += " [" + e.debugInfo.errorLocation + "]";
+  return t;
+}
+
+// Prova a creare il nome con due metodi diversi. Restituisce null se riesce, altrimenti il testo degli errori.
+async function aggiungiNome(nome, formula) {
   const errori = [];
 
+  try {                                    // Metodo 1: creazione diretta
+    await Excel.run(async (ctx) => {
+      ctx.workbook.names.add(nome, formula);
+      await ctx.sync();
+    });
+    return null;
+  } catch (e) { errori.push("metodo 1 -> " + dettaglioErrore(e)); }
+
+  try {                                    // Metodo 2: nome provvisorio, poi si imposta la formula
+    await Excel.run(async (ctx) => {
+      const n = ctx.workbook.names.add(nome, "=0");
+      await ctx.sync();
+      n.formula = formula;
+      await ctx.sync();
+    });
+    return null;
+  } catch (e) {
+    errori.push("metodo 2 -> " + dettaglioErrore(e));
+    try {                                  // pulizia del nome provvisorio rimasto
+      await Excel.run(async (ctx) => {
+        const n = ctx.workbook.names.getItemOrNullObject(nome);
+        n.load("isNullObject");
+        await ctx.sync();
+        if (!n.isNullObject) { n.delete(); await ctx.sync(); }
+      });
+    } catch (e2) { /* niente */ }
+  }
+  return errori.join("\n   ");
+}
+
+async function macroFormuleLambda() {
+  let aggiunte = 0, presenti = 0;
+  const falliti = [];
+
   for (const f of FORMULE) {
+    let esiste = false;
     try {
       await Excel.run(async (ctx) => {
         const n = ctx.workbook.names.getItemOrNullObject(f.nome);
         n.load("isNullObject");
         await ctx.sync();
-        if (!n.isNullObject) { presenti++; return; }
-        ctx.workbook.names.add(f.nome, f.formula);
-        await ctx.sync();
-        aggiunte++;
+        esiste = !n.isNullObject;
       });
-    } catch (e) {
-      errori.push(f.nome + ": " + e.message);
-    }
+    } catch (e) { /* si prova comunque ad aggiungere */ }
+
+    if (esiste) { presenti++; continue; }
+    const errore = await aggiungiNome(f.nome, f.formula);
+    if (errore === null) aggiunte++; else falliti.push({ nome: f.nome, errore: errore });
   }
 
-  let msg = "Formule LAMBDA: " + aggiunte + " aggiunte, " + presenti + " già presenti ✓";
-  if (errori.length) msg += "\nNon aggiunte (" + errori.length + "):\n" + errori.join("\n");
+  let msg = "Formule LAMBDA: " + aggiunte + " aggiunte, " + presenti + " già presenti" + (falliti.length ? "" : " ✓");
+  if (falliti.length) {
+    msg += "\nNon aggiunte (" + falliti.length + "): " + falliti.map((x) => x.nome).join(", ");
+    msg += "\n\nPrimo errore (" + falliti[0].nome + "):\n   " + falliti[0].errore;
+    try {
+      const d = Office.context.diagnostics;
+      msg += "\n\nExcel " + d.version + " - " + d.platform;
+    } catch (e) { /* niente */ }
+  }
   return msg;
 }
