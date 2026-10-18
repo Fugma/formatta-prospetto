@@ -1,9 +1,9 @@
 // ELENCO DELLE MACRO: per aggiungerne una basta aggiungere una riga qui sotto
 // (e il file con la funzione, incluso in taskpane.html).
 const MACRO = [
-  { titolo: "Formatta prospetto",          desc: "Formattazione base",         esegui: macroFormatta },
-  { titolo: "Presenze",                    desc: "Formattazione base - presenze", esegui: macroPresenze },
-  { titolo: "Apri tutto in formato testo", desc: "Tutti i campi in formato testo", esegui: macroApriTesto, senzaBlocco: true }
+  { titolo: "🛠️ Formatta prospetto",          desc: "Formattazione base",         esegui: macroFormatta },
+  { titolo: "📅 Presenze",                    desc: "Formattazione base - presenze", esegui: macroPresenze },
+  { titolo: "💬 Apri tutto in formato testo", desc: "Tutti i campi in formato testo", esegui: macroApriTesto, senzaBlocco: true }
 ];
 
 let inCorso = false;
