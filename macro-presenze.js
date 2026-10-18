@@ -31,7 +31,7 @@ async function macroPresenze() {
     // Da destra verso sinistra, così eliminare colonne non sposta quelle ancora da elaborare
     for (let c = limite - 1; c >= 0; c--) {
       if (h[c] === "DATA PRESENZE" || h[c] === "FINE MESE") {
-        ws.getRangeByIndexes(1, c, nDati, 1).numberFormat = Array.from({ length: nDati }, () => ["m/d/yyyy"]);
+        ws.getRangeByIndexes(1, c, nDati, 1).numberFormat = Array.from({ length: nDati }, () => ["dd/mm/yyyy"]);
         date++;
       }
 

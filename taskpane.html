@@ -9,8 +9,8 @@
 <style>
   body { font-family: "Segoe UI", Arial, sans-serif; margin: 16px; font-size: 14px; }
   #elenco { display: flex; flex-direction: column; gap: 8px; }
-  button { background: #4072C4; color: #fff; border: 0; padding: 10px 12px; cursor: pointer; width: 100%; text-align: left; }
-  button:hover { background: #2f5ba3; }
+  button { background: var(--bg, #4072C4); color: var(--fg, #FFFFFF); border: 0; padding: 10px 12px; cursor: pointer; width: 100%; text-align: left; }
+  button:hover { filter: brightness(0.88); }
   .titolo { display: block; font-size: 14px; }
   .desc { display: block; font-size: 11px; opacity: .85; margin-top: 2px; }
   #stato { margin-top: 16px; white-space: pre-wrap; }
@@ -19,9 +19,11 @@
 <body>
   <div id="elenco"></div>
   <div id="stato">Caricamento...</div>
-  <script src="macro-formatta.js?v=1"></script>
-  <script src="macro-presenze.js?v=1"></script>
-  <script src="macro-apri-testo.js?v=1"></script>
-  <script src="taskpane.js?v=1"></script>
+  <script src="macro-formatta.js?v=2"></script>
+  <script src="macro-presenze.js?v=2"></script>
+  <script src="macro-apri-testo.js?v=2"></script>
+  <script src="macro-budget.js?v=2"></script>
+  <script src="macro-lambda.js?v=2"></script>
+  <script src="taskpane.js?v=2"></script>
 </body>
 </html>
