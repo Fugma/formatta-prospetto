@@ -3,18 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Formatta prospetto</title>
+<title>Macro Studio</title>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   body { font-family: "Segoe UI", Arial, sans-serif; margin: 16px; font-size: 14px; }
-  button { background: #4072C4; color: #fff; border: 0; padding: 10px 16px; font-size: 14px; cursor: pointer; width: 100%; }
-  button:disabled { background: #999; cursor: default; }
-  #stato { margin-top: 14px; white-space: pre-wrap; }
+  #elenco { display: flex; flex-direction: column; gap: 8px; }
+  button { background: #4072C4; color: #fff; border: 0; padding: 10px 12px; cursor: pointer; width: 100%; text-align: left; }
+  button:hover { background: #2f5ba3; }
+  .titolo { display: block; font-size: 14px; }
+  .desc { display: block; font-size: 11px; opacity: .85; margin-top: 2px; }
+  #stato { margin-top: 16px; white-space: pre-wrap; }
 </style>
 </head>
 <body>
-  <button id="btn" disabled>Formatta prospetto</button>
+  <div id="elenco"></div>
   <div id="stato">Caricamento...</div>
-  <script src="taskpane.js"></script>
+  <script src="macro-formatta.js?v=1"></script>
+  <script src="macro-presenze.js?v=1"></script>
+  <script src="macro-apri-testo.js?v=1"></script>
+  <script src="taskpane.js?v=1"></script>
 </body>
 </html>
