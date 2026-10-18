@@ -39,13 +39,26 @@ const FORMULE = [
    formula: "=LAMBDA(CodiceAzienda,CodiceDipendente, TEXT(CodiceAzienda, \"000000\") & TEXT(CodiceDipendente, \"0000000\"))"}
 ];
 
+const VERSIONE_LAMBDA = "v4";
+
 function dettaglioErrore(e) {
   let t = (e.code ? e.code + ": " : "") + e.message;
   if (e.debugInfo && e.debugInfo.errorLocation) t += " [" + e.debugInfo.errorLocation + "]";
   return t;
 }
 
-// Prova a creare il nome con due metodi diversi. Restituisce null se riesce, altrimenti il testo degli errori.
+async function eliminaNomeSeEsiste(nome) {
+  try {
+    await Excel.run(async (ctx) => {
+      const n = ctx.workbook.names.getItemOrNullObject(nome);
+      n.load("isNullObject");
+      await ctx.sync();
+      if (!n.isNullObject) { n.delete(); await ctx.sync(); }
+    });
+  } catch (e) { /* niente */ }
+}
+
+// Prova a creare il nome con due metodi. Restituisce null se riesce, altrimenti il testo degli errori.
 async function aggiungiNome(nome, formula) {
   const errori = [];
 
@@ -57,6 +70,8 @@ async function aggiungiNome(nome, formula) {
     return null;
   } catch (e) { errori.push("metodo 1 -> " + dettaglioErrore(e)); }
 
+  await eliminaNomeSeEsiste(nome);
+
   try {                                    // Metodo 2: nome provvisorio, poi si imposta la formula
     await Excel.run(async (ctx) => {
       const n = ctx.workbook.names.add(nome, "=0");
@@ -67,16 +82,29 @@ async function aggiungiNome(nome, formula) {
     return null;
   } catch (e) {
     errori.push("metodo 2 -> " + dettaglioErrore(e));
-    try {                                  // pulizia del nome provvisorio rimasto
-      await Excel.run(async (ctx) => {
-        const n = ctx.workbook.names.getItemOrNullObject(nome);
-        n.load("isNullObject");
-        await ctx.sync();
-        if (!n.isNullObject) { n.delete(); await ctx.sync(); }
-      });
-    } catch (e2) { /* niente */ }
+    await eliminaNomeSeEsiste(nome);
   }
   return errori.join("\n   ");
+}
+
+// Piccole prove per capire cosa accetta Excel (i nomi di prova vengono poi eliminati)
+async function proveNomi() {
+  const NOME = "rr_prova_temporanea";
+  const prove = [
+    ["formula semplice (=1+1), diretto", async (ctx) => { ctx.workbook.names.add(NOME, "=1+1"); await ctx.sync(); }],
+    ["LAMBDA semplice, diretto", async (ctx) => { ctx.workbook.names.add(NOME, "=LAMBDA(x,x+1)"); await ctx.sync(); }],
+    ["LAMBDA semplice, in due passaggi", async (ctx) => {
+        const n = ctx.workbook.names.add(NOME, "=0"); await ctx.sync();
+        n.formula = "=LAMBDA(x,x+1)"; await ctx.sync(); }]
+  ];
+  const righe = [];
+  for (const [descrizione, fn] of prove) {
+    let esito = "ok";
+    try { await Excel.run(fn); } catch (e) { esito = "ERRORE (" + (e.code || e.message) + ")"; }
+    righe.push("   " + descrizione + ": " + esito);
+    await eliminaNomeSeEsiste(NOME);
+  }
+  return righe.join("\n");
 }
 
 async function macroFormuleLambda() {
@@ -99,10 +127,11 @@ async function macroFormuleLambda() {
     if (errore === null) aggiunte++; else falliti.push({ nome: f.nome, errore: errore });
   }
 
-  let msg = "Formule LAMBDA: " + aggiunte + " aggiunte, " + presenti + " già presenti" + (falliti.length ? "" : " ✓");
+  let msg = "Formule LAMBDA (" + VERSIONE_LAMBDA + "): " + aggiunte + " aggiunte, " + presenti + " già presenti" + (falliti.length ? "" : " ✓");
   if (falliti.length) {
-    msg += "\nNon aggiunte (" + falliti.length + "): " + falliti.map((x) => x.nome).join(", ");
+    msg += "\nNon aggiunte: " + falliti.length + " su " + FORMULE.length;
     msg += "\n\nPrimo errore (" + falliti[0].nome + "):\n   " + falliti[0].errore;
+    msg += "\n\nProve:\n" + await proveNomi();
     try {
       const d = Office.context.diagnostics;
       msg += "\n\nExcel " + d.version + " - " + d.platform;
