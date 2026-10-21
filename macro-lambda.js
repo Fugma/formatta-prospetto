@@ -36,10 +36,12 @@ const FORMULE = [
   {nome: "rr_quota_tfr_al_netto_ctr_0_50perc",
    formula: "=LAMBDA(imponibile_tfr,imponibile_inps,max_ctr_1_soggetto_0_non_soggetto,apprendista_1_si_0_no,valore_max_ctr, LET(quota_tfr_lorda, ROUND(imponibile_tfr / 13.5, 2), ctr_0_50, IF(apprendista_1_si_0_no = 1, 0, IF(AND(max_ctr_1_soggetto_0_non_soggetto = 1, imponibile_inps > valore_max_ctr), ROUND(valore_max_ctr * 0.5%, 2), ROUND(imponibile_inps * 0.5%, 2))), quota_tfr_lorda - ctr_0_50))"},
   {nome: "rr_super_codice_zucchetti",
-   formula: "=LAMBDA(CodiceAzienda,CodiceDipendente, TEXT(CodiceAzienda, \"000000\") & TEXT(CodiceDipendente, \"0000000\"))"}
+   formula: "=LAMBDA(CodiceAzienda,CodiceDipendente, TEXT(CodiceAzienda, \"000000\") & TEXT(CodiceDipendente, \"0000000\"))"},
+  {nome: "numero_in_lettere",
+   formula: "=LAMBDA(importo, LET(num,ROUND(importo,2),intero,INT(num),centesimi,ROUND(MOD(num,1)*100,0),unita,{\"\",\"uno\",\"due\",\"tre\",\"quattro\",\"cinque\",\"sei\",\"sette\",\"otto\",\"nove\",\"dieci\",\"undici\",\"dodici\",\"tredici\",\"quattordici\",\"quindici\",\"sedici\",\"diciassette\",\"diciotto\",\"diciannove\"},decine,{\"\",\"dieci\",\"venti\",\"trenta\",\"quaranta\",\"cinquanta\",\"sessanta\",\"settanta\",\"ottanta\",\"novanta\"},gruppo,LAMBDA(x,LET(cent,INT(x/100),resto,MOD(x,100),prefisso,IF(cent=0,\"\",IF(cent=1,\"cento\",INDEX(unita,cent+1)&\"cento\")),prefisso2,IF(OR(resto=8,AND(resto>=80,resto<90)),IF(cent=0,\"\",LEFT(prefisso,LEN(prefisso)-1)),prefisso),parte,IF(resto<20,INDEX(unita,resto+1),LET(dec,INT(resto/10),uni,MOD(resto,10),base,INDEX(decine,dec+1),IF(OR(uni=1,uni=8),LEFT(base,LEN(base)-1),base)&INDEX(unita,uni+1))),prefisso2&parte)),migliaia,INT(intero/1000),resto3,MOD(intero,1000),testo,IF(intero=0,\"zero\",IF(migliaia=0,gruppo(resto3),IF(migliaia=1,\"mille\",gruppo(migliaia)&\"mila\")&gruppo(resto3))),testo&\"/\"&TEXT(centesimi,\"00\")))"}
 ];
 
-const VERSIONE_LAMBDA = "v6";
+const VERSIONE_LAMBDA = "v7";
 
 // ---------------------------------------------------------------------------------------------
 // Dalle prove risulta che names.add() legge le formule con le impostazioni ITALIANE (separatore ";",
